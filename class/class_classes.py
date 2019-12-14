@@ -85,28 +85,134 @@ class File():
             if cp_info.tag.value in [5, 6]:
                 skip_next = True
 
+        self.access_flags = AccessFlags(off, self.raw)
+        off = self.access_flags.end
+
+        self.this_class = U2(off, self.raw)
+        off = self.this_class.end
+
+        self.super_class = U2(off, self.raw)
+        off = self.super_class.end
+
+        self.interfaces_count = U2(off, self.raw)
+        off = self.interfaces_count.end
+        for idx in range(0, self.interfaces_count.value):
+            interface = U2(off, self.raw)
+            # TODO: check in bounds
+            self.interfaces.append(interface)
+            off = interface.end
+
+        self.fields_count = U2(off, self.raw)
+        off = self.fields_count.end
+        for idx in range(0, self.fields_count.value):
+            field_info = FieldInfo(off, self.raw)
+            # TODO: check in bounds
+            self.fields.append(field_info)
+            off = field_info.end
+
+
+
+
     def pretty_print(self, indent=0):
         print(' '*indent, end='')
         print('Magic: {}'.format(self.magic.hex()))
+
         print(' '*indent, end='')
         print('Minor: {}'.format(self.minor))
         print(' '*indent, end='')
         print('Major: {}'.format(self.major))
+
         print(' '*indent, end='')
         print('Constant Pool Count: {}'.format(self.constant_pool_count))
-        print(' '*indent, end='')
-        print('Constant Pool Count: {}'.format(len(self.constant_pool)))
         idx = 0
         for cp_info in self.constant_pool:
+            print(' '*indent, end='')
+            print('Consant Pool[{}]:'.format(idx))
             if not cp_info:
                 print(' '*indent, end='')
                 print('INVALID INDEX')
-                idx += 1
-                continue
-            print(' '*indent, end='')
-            print('Index: {}'.format(idx))
-            cp_info.pretty_print(indent+2)
+            else:
+                cp_info.pretty_print(indent+2)
             idx += 1
+        
+        print(' '*indent, end='')
+        print('Access Flags:')
+        self.access_flags.pretty_print(indent+2)
+
+        print(' '*indent, end='')
+        print('This Class Index: {}'.format(self.this_class))
+        this_class_info = self.constant_pool[self.this_class.value]
+        if this_class_info.tag.value != 7:
+            raise ClassError('invalid tag for this_class_info')
+        print(' '*(indent+2), end='')
+        print('Class Info: ')
+        this_class_info.pretty_print(indent+4)
+        this_class_name = self.constant_pool[this_class_info.name_index.value]
+        if this_class_name.tag.value != 1:
+            raise ClassError('invalid tag for this_class_name')
+        print(' '*(indent+2), end='')
+        print('Name: ')
+        this_class_name.pretty_print(indent+4)
+
+        print(' '*indent, end='')
+        print('Super Class Index: {}'.format(self.super_class))
+        if self.super_class.value != 0:
+            super_class_info = self.constant_pool[self.super_class.value]
+            if super_class_info.tag.value != 7:
+                raise ClassError('invalid tag for super_class_info')
+            print(' '*(indent+2), end='')
+            print('Class Info: ')
+            super_class_info.pretty_print(indent+4)
+            super_class_name = self.constant_pool[super_class_info.name_index.value]
+            if super_class_name.tag.value != 1:
+                raise ClassError('invalid tag for super_class_name')
+            print(' '*(indent+2), end='')
+            print('Name: ')
+            super_class_name.pretty_print(indent+4)
+
+        print(' '*indent, end='')
+        print('Interfaces Count: {}'.format(self.interfaces_count))
+        idx = 0
+        for interface in self.interfaces:
+            print(' '*indent, end='')
+            print('Interfaces[{}]: {}'.format(idx, interface))
+            idx += 1
+
+
+class AccessFlags:
+    flag_lookup = {
+        0x0001: 'ACC_PUBLIC',
+        0x0010: 'ACC_FINAL',
+        0x0020: 'ACC_SUPER',
+        0x0200: 'ACC_INTERFACE',
+        0x0400: 'ACC_ABSTRACT',
+        0x1000: 'ACC_SYNTHETIC',
+        0x2000: 'ACC_ANNOTATION',
+        0x4000: 'ACC_ENUM',
+    }
+
+    def __init__(self, start=0, file_interface=None):
+        self.start = start
+        self.value = 0
+        self.flags = []
+
+        if file_interface:
+            AccessFlags.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = start
+        self.value = U2(off, file_interface)
+        off = self.value.end
+        for flag in self.flag_lookup:
+            if self.value.value & flag:
+                self.flags.append(self.flag_lookup[flag])
+        self.end = self.value.end
+
+    def pretty_print(self, indent=0):
+        for flag in self.flags:
+            print(' '*indent, end='')
+            print(flag)
+
 
 class Template:
     def __init__(self, start=0, file_interface=None):
