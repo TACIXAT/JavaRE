@@ -1,6 +1,6 @@
 # Goal
 
-Initally cloning WASMFile for Java class files. Once I can parse and disassemble the goal is to make a nice RE framework.
+Initally cloning WASMFile for Java class files. Once I can parse and disassemble the goal is to make a nice RE framework. Let's see what I can get done in a weekend!
 
 ## Target Features
 
