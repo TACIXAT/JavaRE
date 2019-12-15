@@ -112,10 +112,10 @@ class File():
 
         self.methods_count = U2(off, self.raw)
         off = self.methods_count.end
-        # for idx in range(0, self.methods_count.value):
-        #     method_info = MethodInfo(off, self.raw)
-        #     self.methods.append(method_info)
-        #     off = method_info.end
+        for idx in range(0, self.methods_count.value):
+            method_info = MethodInfo(off, self.raw, self.constant_pool)
+            self.methods.append(method_info)
+            off = method_info.end
 
 
     def pretty_print(self, indent=0):
@@ -197,29 +197,79 @@ class Template:
         print(' '*indent, end='')
 
 class MethodInfo:
-    def __init__(self, start=0, file_interface=None):
+    def __init__(self, start=0, file_interface=None, constant_pool=None):
         self.start = start
+        self.access_flags = 0
+        self.name_index = 0
+        self.descriptor_index = 0
+        self.attributes_count = 0
+        self.attributes = []
 
         if file_interface:
-            MethodInfo.__parse__(self, start, file_interface)
+            MethodInfo.__parse__(self, start, file_interface, constant_pool)
 
-    def __parse__(self, start, file_interface):
+    def __parse__(self, start, file_interface, constant_pool=None):
         off = start
+        self.access_flags = AccessFlags(off, file_interface, method=True)
+        off = self.access_flags.end
+        self.name_index = U2(off, file_interface)
+        off = self.name_index.end
+        self.descriptor_index = U2(off, file_interface)
+        off = self.descriptor_index.end
+        self.attributes_count = U2(off, file_interface)
+        off = self.attributes_count.end
+        for idx in range(self.attributes_count.value):
+            attribute_info = AttributeInfo(off, file_interface)
+            attribute_info = AttributeInfo.upgrade(attribute_info, file_interface, constant_pool)
+            self.attributes.append(attribute_info)
+            off = attribute_info.end
+        self.end = off
 
     def pretty_print(self, indent=0):
         print(' '*indent, end='')
 
+
+class VerificationTypeInfo:
+    tag_names = {
+        0: 'ITEM_Top',
+        1: 'ITEM_Integer',
+        2: 'ITEM_Float',
+        3: 'ITEM_Double',
+        4: 'ITEM_Long',
+        5: 'ITEM_Null',
+        6: 'ITEM_UninitializedThis',
+        7: 'ITEM_Object',
+        8: 'ITEM_Uninitialized',
+    }
+    def __init__(self, start=0, file_interface=None):
+        self.start = start
+        if file_interface:
+            VerificationTypeInfo.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = self.start
+        self.tag = U1(off, file_interface)
+        off = self.tag.end
+        self.tag_name = self.tag_names[self.tag.value]
+        if self.tag.value == 7:
+            self.cpool_index = U2(off, file_interface)
+            off = self.cpool_index.end
+        if self.tag.value == 8:
+            self.offset = U2(off, file_interface)
+            off = self.offset.end
+        self.end = off
+
 class AttributeInfo:
-    def __init__(self, start=0, file_interface=None, constant_pool=None):
+    def __init__(self, start=0, file_interface=None):
         self.start = start
         self.attribute_name_index = 0
         self.attribute_length = 0
         self.info = b''
 
         if file_interface:
-            AttributeInfo.__parse__(self, start, file_interface, constant_pool)
+            AttributeInfo.__parse__(self, start, file_interface)
 
-    def __parse__(self, start, file_interface, constant_pool=None):
+    def __parse__(self, start, file_interface):
         off = start
         self.attribute_name_index = U2(off, file_interface)
         off = self.attribute_name_index.end
@@ -229,41 +279,202 @@ class AttributeInfo:
         off += self.attribute_length.value
         self.end = off
 
-        if not constant_pool:
-            return
-
-        cpi = constant_pool[self.attribute_name_index.value]
+    @staticmethod
+    def upgrade(attribute_info, file_interface, constant_pool):
+        cpi = constant_pool[attribute_info.attribute_name_index.value]
         if cpi.tag.value != 1:
             raise ClassError('invalid name tag')
 
         name = cpi.bytes
+        print('name', name)
+        start = attribute_info.start
         if name == b'ConstantValue':
-            self.constantvalue_index = U2(
-                self.attribute_length.end, file_interface)
-        # TODO: implement the rest
-        # Code
-        # StackMapTable
-        # Exceptions
-        # InnerClasses
-        # EnclosingMethod
-        # Synthetic
-        # Signature
-        # SourceFile
-        # SourceDebugExtension
-        # LineNumberTable
-        # LocalVariableTable
-        # LocalVariableTypeTable
-        # Deprecated
-        # RuntimeVisibleAnnotations
-        # RuntimeInvisibleAnnotations
-        # RuntimeVisibleParameterAnnotations
-        # RuntimeInvisibleParameterAnnotations
-        # AnnotationDefault
-        # BootstrapMethods
-
+            return ConstantValueAttribute(start, file_interface)
+        elif name == b'Code':
+            return CodeAttribute(start, file_interface, constant_pool)
+        elif name == b'StackMapTable':
+            return StackMapTable(start, file_interface)
+        # elif name == b'Exceptions':
+        #     pass
+        # elif name == b'InnerClasses':
+        #     pass
+        # elif name == b'EnclosingMethod':
+        #     pass
+        # elif name == b'Synthetic':
+        #     pass
+        # elif name == b'Signature':
+        #     pass
+        # elif name == b'SourceFile':
+        #     pass
+        # elif name == b'SourceDebugExtension':
+        #     pass
+        # elif name == b'LineNumberTable':
+        #     pass
+        # elif name == b'LocalVariableTable':
+        #     pass
+        # elif name == b'LocalVariableTypeTable':
+        #     pass
+        # elif name == b'Deprecated':
+        #     pass
+        # elif name == b'RuntimeVisibleAnnotations':
+        #     pass
+        # elif name == b'RuntimeInvisibleAnnotations':
+        #     pass
+        # elif name == b'RuntimeVisibleParameterAnnotations':
+        #     pass
+        # elif name == b'RuntimeInvisibleParameterAnnotations':
+        #     pass
+        # elif name == b'AnnotationDefault':
+        #     pass
+        # elif name == b'BootstrapMethods':
+        #     pass
+        else:
+            raise ClassError('unsupported attribute: {}'.format(name))
+        return attribute_info
 
     def pretty_print(self, indent=0):
         print(' '*indent, end='')
+
+class StackMapFrame:
+    def __init__(self, start=0, file_interface=None):
+        self.start = start
+        if file_interface:
+            StackMapFrame.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = self.start
+        self.frame_type = U1(start, file_interface)
+        off = self.frame_type.end
+        ft = self.frame_type.value
+        if ft <= 63 and ft >= 0 :
+            self.frame_type_str = 'SAME'
+        elif ft <= 127 and ft >= 64:
+            self.frame_type_str = 'SAME_LOCALS_1_STACK_ITEM'
+            self.stack = [VerificationTypeInfo(off, file_interface)]
+            off = self.stack[0].end
+        elif ft == 247:
+            self.frame_type_str = 'SAME_LOCALS_1_STACK_ITEM_EXTENDED'
+            self.offset_delta = U2(off, file_interface)
+            off = self.offset_delta.end
+            self.stack = [VerificationTypeInfo(off, file_interface)]
+            off = self.stack[0].end
+        elif ft <= 250 and ft >= 248:
+            self.frame_type_str = 'CHOP'
+            self.offset_delta = U2(off, file_interface)
+            off = self.offset_delta.end
+        elif ft == 251:
+            self.frame_type_str = 'SAME_FRAME_EXTENDED'
+            self.offset_delta = U2(off, file_interface)
+            off = self.offset_delta.end
+        elif ft <= 254 and ft >= 252:
+            self.frame_type_str = 'APPEND'
+            self.offset_delta = U2(off, file_interface)
+            off = self.offset_delta.end
+            self.locals = []
+            for idx in range(ft-251):
+                vti = VerificationTypeInfo(off, file_interface)
+                self.locals.append(vti)
+                off = vti.end
+        elif ft == 255:
+            self.frame_type_str = 'FULL_FRAME'
+            self.offset_delta = U2(off, file_interface)
+            off = self.offset_delta.end
+            self.number_of_locals = U2(off, file_interface)
+            off = self.number_of_locals.end
+            self.locals = []
+            for idx in range(self.number_of_locals.value):
+                vti = VerificationTypeInfo(off, file_interface)
+                self.locals.append(vti)
+                off = vti.end
+            self.number_of_stack_items = U2(off, file_interface)
+            off = self.number_of_stack_items.end
+            self.stack = []
+            for idx in range(self.number_of_stack_items.value):
+                vti = VerificationTypeInfo(off, file_interface)
+                self.stack.append(vti)
+                off = vti.end
+        else:
+            raise ClassError('invalid frame type {}'.format(ft))
+        self.end = off
+
+class StackMapTable(AttributeInfo):
+    def __init__(self, start=0, file_interface=None):
+        AttributeInfo.__init__(self, start, file_interface)
+        self.number_of_entries = 0
+        self.entries = []
+        if file_interface:
+            StackMapTable.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = self.attribute_length.end
+        self.number_of_entries = U2(off, file_interface)
+        off = self.number_of_entries.end
+        for idx in range(self.number_of_entries.value):
+            entry = StackMapFrame(off, file_interface)
+            self.entries.append(entry)
+            off = entry.end
+
+
+class ConstantValueAttribute(AttributeInfo):
+    def __init__(self, start=0, file_interface=None):
+        AttributeInfo.__init__(self, start, file_interface)
+        if file_interface:
+            ConstantValueAttribute.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = self.attribute_length.end
+        self.constantvalue_index = U2(off, file_interface)
+
+class ExceptionTableEntry:
+    def __init__(self, start=0, file_interface=None):
+        if file_interface:
+            ExceptionTableEntry.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = start
+        self.start_pc = U2(off, file_interface)    
+        off = self.start_pc.end
+        self.end_pc = U2(off, file_interface)    
+        off = self.end_pc.end
+        self.handler_pc = U2(off, file_interface)    
+        off = self.handler_pc.end
+        self.catch_type = U2(off, file_interface)    
+        off = self.catch_type.end
+        self.end = off
+
+class CodeAttribute(AttributeInfo):
+    def __init__(self, start=0, file_interface=None, constant_pool=None):
+        AttributeInfo.__init__(self, start, file_interface)
+        if file_interface:
+            CodeAttribute.__parse__(self, start, file_interface, constant_pool)
+
+    def __parse__(self, start, file_interface, constant_pool=None):
+        off = self.attribute_length.end
+        self.max_stack = U2(off, file_interface)
+        off = self.max_stack.end
+        self.max_locals = U2(off, file_interface)
+        off = self.max_locals.end
+        self.code_length = U4(off, file_interface)
+        off = self.code_length.end
+        self.code = file_interface.read(off, self.code_length.value)
+        off += self.code_length.value
+        self.exception_table_length = U2(off, file_interface)
+        off = self.exception_table_length.end
+        print('ete len', self.exception_table_length)
+        self.exception_table = []
+        for idx in range(self.exception_table_length.value):
+            exception_table_entry = ExceptionTableEntry(off, file_interface)
+            self.exception_table.append(exception_table_entry)
+            off = exception_table_entry.end
+        self.attributes_count = U2(off, file_interface)
+        off = self.attributes_count.end
+        self.attributes = []
+        for idx in range(self.attributes_count.value):
+            attribute_info = AttributeInfo(off, file_interface)
+            attribute_info = AttributeInfo.upgrade(attribute_info, file_interface, constant_pool)
+            self.attributes.append(attribute_info)
+            off = attribute_info.end
+        self.end = off
 
 class FieldInfo:
     def __init__(self, start=0, file_interface=None, constant_pool=None):
@@ -288,7 +499,9 @@ class FieldInfo:
         self.attributes_count = U2(off, file_interface)
         off = self.attributes_count.end
         for idx in range(self.attributes_count.value):
-            attribute_info = AttributeInfo(off, file_interface, constant_pool)
+            attribute_info = AttributeInfo(off, file_interface)
+            attribute_info = AttributeInfo.upgrade(
+                attribute_info, file_interface, constant_pool)
             self.attributes.append(attribute_info)
             off = attribute_info.end
         self.end = off
@@ -321,12 +534,12 @@ class AccessFlags:
         0x4000: 'ACC_ENUM',
     }
 
-    def __init__(self, start=0, file_interface=None, is_method=False):
+    def __init__(self, start=0, file_interface=None, method=False):
         self.start = start
         self.value = 0
         self.flags = []
 
-        if is_method:
+        if method:
             for flag in self.method_flag_lookup:
                 self.flag_lookup[flag] = self.method_flag_lookup[flag]
 
