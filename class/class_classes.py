@@ -105,12 +105,17 @@ class File():
         self.fields_count = U2(off, self.raw)
         off = self.fields_count.end
         for idx in range(0, self.fields_count.value):
-            field_info = FieldInfo(off, self.raw)
+            field_info = FieldInfo(off, self.raw, self.constant_pool)
             # TODO: check in bounds
             self.fields.append(field_info)
             off = field_info.end
 
-
+        self.methods_count = U2(off, self.raw)
+        off = self.methods_count.end
+        # for idx in range(0, self.methods_count.value):
+        #     method_info = MethodInfo(off, self.raw)
+        #     self.methods.append(method_info)
+        #     off = method_info.end
 
 
     def pretty_print(self, indent=0):
@@ -178,12 +183,137 @@ class File():
             print('Interfaces[{}]: {}'.format(idx, interface))
             idx += 1
 
+class Template:
+    def __init__(self, start=0, file_interface=None):
+        self.start = start
+
+        if file_interface:
+            Template_CHANGEME.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = start
+
+    def pretty_print(self, indent=0):
+        print(' '*indent, end='')
+
+class MethodInfo:
+    def __init__(self, start=0, file_interface=None):
+        self.start = start
+
+        if file_interface:
+            MethodInfo.__parse__(self, start, file_interface)
+
+    def __parse__(self, start, file_interface):
+        off = start
+
+    def pretty_print(self, indent=0):
+        print(' '*indent, end='')
+
+class AttributeInfo:
+    def __init__(self, start=0, file_interface=None, constant_pool=None):
+        self.start = start
+        self.attribute_name_index = 0
+        self.attribute_length = 0
+        self.info = b''
+
+        if file_interface:
+            AttributeInfo.__parse__(self, start, file_interface, constant_pool)
+
+    def __parse__(self, start, file_interface, constant_pool=None):
+        off = start
+        self.attribute_name_index = U2(off, file_interface)
+        off = self.attribute_name_index.end
+        self.attribute_length = U4(off, file_interface)
+        off = self.attribute_length.end
+        self.info = file_interface.read(off, self.attribute_length.value)
+        off += self.attribute_length.value
+        self.end = off
+
+        if not constant_pool:
+            return
+
+        cpi = constant_pool[self.attribute_name_index.value]
+        if cpi.tag.value != 1:
+            raise ClassError('invalid name tag')
+
+        name = cpi.bytes
+        if name == b'ConstantValue':
+            self.constantvalue_index = U2(
+                self.attribute_length.end, file_interface)
+        # TODO: implement the rest
+        # Code
+        # StackMapTable
+        # Exceptions
+        # InnerClasses
+        # EnclosingMethod
+        # Synthetic
+        # Signature
+        # SourceFile
+        # SourceDebugExtension
+        # LineNumberTable
+        # LocalVariableTable
+        # LocalVariableTypeTable
+        # Deprecated
+        # RuntimeVisibleAnnotations
+        # RuntimeInvisibleAnnotations
+        # RuntimeVisibleParameterAnnotations
+        # RuntimeInvisibleParameterAnnotations
+        # AnnotationDefault
+        # BootstrapMethods
+
+
+    def pretty_print(self, indent=0):
+        print(' '*indent, end='')
+
+class FieldInfo:
+    def __init__(self, start=0, file_interface=None, constant_pool=None):
+        self.start = start
+        self.access_flags = None
+        self.name_index = 0
+        self.descriptor_index = 0
+        self.attributes_count = 0
+        self.attributes = []
+
+        if file_interface:
+            FieldInfo.__parse__(self, start, file_interface, constant_pool)
+
+    def __parse__(self, start, file_interface, constant_pool=None):
+        off = start
+        self.access_flags = AccessFlags(off, file_interface)
+        off = self.access_flags.end
+        self.name_index = U2(off, file_interface)
+        off = self.name_index.end
+        self.descriptor_index = U2(off, file_interface)
+        off = self.descriptor_index.end
+        self.attributes_count = U2(off, file_interface)
+        off = self.attributes_count.end
+        for idx in range(self.attributes_count.value):
+            attribute_info = AttributeInfo(off, file_interface, constant_pool)
+            self.attributes.append(attribute_info)
+            off = attribute_info.end
+        self.end = off
+
+    def pretty_print(self, indent=0):
+        print(' '*indent, end='')
 
 class AccessFlags:
+    method_flag_lookup = {
+        0x0020: 'ACC_SYNCHRONIZED',
+        0x0040: 'ACC_BRIDGE',
+        0x0080: 'ACC_VARARGS',
+        0x0100: 'ACC_NATIVE',
+        0x0800: 'ACC_STRICT',
+    }
+
     flag_lookup = {
         0x0001: 'ACC_PUBLIC',
+        0x0002: 'ACC_PRIVATE',
+        0x0004: 'ACC_PROTECTED',
+        0x0008: 'ACC_STATIC',
         0x0010: 'ACC_FINAL',
         0x0020: 'ACC_SUPER',
+        0x0040: 'ACC_VOLATILE',
+        0x0080: 'ACC_TRANSIENT',
         0x0200: 'ACC_INTERFACE',
         0x0400: 'ACC_ABSTRACT',
         0x1000: 'ACC_SYNTHETIC',
@@ -191,10 +321,14 @@ class AccessFlags:
         0x4000: 'ACC_ENUM',
     }
 
-    def __init__(self, start=0, file_interface=None):
+    def __init__(self, start=0, file_interface=None, is_method=False):
         self.start = start
         self.value = 0
         self.flags = []
+
+        if is_method:
+            for flag in self.method_flag_lookup:
+                self.flag_lookup[flag] = self.method_flag_lookup[flag]
 
         if file_interface:
             AccessFlags.__parse__(self, start, file_interface)
@@ -213,19 +347,6 @@ class AccessFlags:
             print(' '*indent, end='')
             print(flag)
 
-
-class Template:
-    def __init__(self, start=0, file_interface=None):
-        self.start = start
-
-        if file_interface:
-            Template_CHANGEME.__parse__(self, start, file_interface)
-
-    def __parse__(self, start, file_interface):
-        off = start
-
-    def pretty_print(self, indent=0):
-        print(' '*indent, end='')
 
 class ConstantPoolInfo:
     tag_name_lookup = {
