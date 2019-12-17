@@ -13,7 +13,7 @@ Initally cloning WASMFile for Java class files. Once I can parse and disassemble
 * Handle single class
 * Handle JAR file
 * Variable renaming
-  - Keep a sqlite db with mapings
+  - Create shadow constant pool
 * Find definition
   - Use JAR paths
   - Index where we need to

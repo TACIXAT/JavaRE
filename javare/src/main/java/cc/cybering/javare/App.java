@@ -8,55 +8,79 @@ import org.apache.bcel.classfile.Utility;
 import org.apache.bcel.util.ByteSequence;
 import org.apache.bcel.generic.InstructionList;
 import org.apache.bcel.generic.InstructionHandle;
+import jexer.TApplication;
+import jexer.TWindow;
+import jexer.TAction;
+import jexer.TList;
+import jexer.TWidget;
+import jexer.event.TResizeEvent;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.jar.JarFile;
+import java.util.jar.JarEntry;
+import java.util.Enumeration;
 
 public class App 
 {
-    public static void main( String[] args )
+    public static void main( String[] args ) throws Exception
     {
     	if (args.length < 1) {
     		System.out.println("please provide a class file");
     		return;
     	}
 
+    	// JarFile jarFile = new JarFile(args[0]);
+    	// Enumeration<JarEntry> entries = jarFile.entries();
+    	// while (entries.hasMoreElements()) {
+    	// 	JarEntry jarEntry = entries.nextElement();
+    	// 	System.out.println(jarEntry.getName());
+    	// 	// jarFile.getInputStream(jarEntry);
+    	// }
+
         ClassParser classParser = new ClassParser(args[0]);
-        try {
-        	JavaClass javaClass = classParser.parse();
-        	System.out.println(javaClass);
-        	dumpMethods(javaClass);
-        } catch(Exception e) {
-        	System.out.println(e);
-        }
+    	JavaClass javaClass = classParser.parse();
+    	ConstantPool shadowPool = javaClass.getConstantPool().copy();
+
+        final TApplication app = new TApplication(
+        	TApplication.BackendType.XTERM);
+        app.addFileMenu();
+        app.addWindowMenu();
+        FunctionWindow window = new FunctionWindow(
+        	app, javaClass.getClassName(), 10, 10, getMethodList(javaClass), Arrays.asList(javaClass.getMethods()), shadowPool);
+        app.run();
     }
 
-	static void dumpMethods(JavaClass javaClass) {
-		Method[] methods = javaClass.getMethods();
-		for (Method method : methods) {
-			System.out.println("==== " + method.getName());
-			InstructionList instructionList = new InstructionList(method.getCode().getCode());
-			String[] disassembly = getDisassembly(method.getCode().getCode(), javaClass.getConstantPool());
-			int idx = 0;
-			for (InstructionHandle instruction : instructionList) {
-				System.out.println(instruction);
-				System.out.println(disassembly[idx]);
-				idx++;
-			}
-		}
-	}
-
-	static String[] getDisassembly(final byte[] code, final ConstantPool constantPool) {
-	 	final StringBuilder buf = new StringBuilder(code.length * 20);
-		try (ByteSequence stream = new ByteSequence(code)) {
-            for (int i = 0; stream.available() > 0; i++) {
-                final String indices = Utility.fillup(stream.getIndex() + ":", 6, true, ' ');
-                buf.append(indices).append(Utility.codeToString(stream, constantPool, false)).append('\n');
-            }
-        } catch (final Exception e) {
-            System.out.println(e);
+    static List<String> getMethodList(JavaClass javaClass) {
+    	Method[] methods = javaClass.getMethods();
+        List<String> methodList = new ArrayList<String>();
+        for (Method method : methods) {
+        	methodList.add(method.getName());
         }
-        return buf.toString().split("\n");
+
+        return methodList;
+    }
+
+	// static void dumpMethods(JavaClass javaClass) {
+	// 	Method[] methods = javaClass.getMethods();
+	// 	for (Method method : methods) {
+	// 		System.out.println("==== " + method.getName());
+	// 		InstructionList instructionList = new InstructionList(method.getCode().getCode());
+	// 		List<String> disassembly = getDisassembly(method.getCode().getCode(), javaClass.getConstantPool());
+	// 		int idx = 0;
+	// 		for (InstructionHandle instruction : instructionList) {
+	// 			System.out.println(instruction);
+	// 			System.out.println(disassembly[idx]);
+	// 			idx++;
+	// 		}
+	// 	}
+	// }
+
+	static void rename(ConstantPool constantPool, int index, String name) {
+
 	}
 
-	static rename(ConstantPool constantPool, int index, String name) {
-		
+	static void getBasicBlocks() {
+
 	}
 }
