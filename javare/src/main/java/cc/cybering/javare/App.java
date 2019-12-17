@@ -30,6 +30,46 @@ public class App
     		return;
     	}
 
+    	/*
+			Tree style display?
+			Class -> Vars / Functions
+
+    		Handle Jar ==
+			Iterate jar
+			Replace path / -> .
+			Save map of full class name -> jarentry
+			Display list of classes
+			Open class
+			Use what we currently have from there
+			
+			Renaming ==
+			Map of old -> new name
+			Apply replacements to constant pool
+			Save position
+			Recalculate disassembly
+			Restore position
+			Class replacements and jar level replacements
+
+			Goto addr ==
+			Binary search for string prefix?
+			Probably just brute force initially
+			Maybe create a map of addr -> line
+			Set position
+
+			Comment ==
+			Map function:line -> comment
+
+			Find Definition ==
+			Open class
+			Find function or variable
+
+			Auto Rename All ==
+			Iterate all classes
+			Rename functions -> FuncTypeA
+			Rename class vars -> ClassVarTypeA
+			Rename locals?
+    	*/
+
     	// JarFile jarFile = new JarFile(args[0]);
     	// Enumeration<JarEntry> entries = jarFile.entries();
     	// while (entries.hasMoreElements()) {
